@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STAR DODGER - 縦スクロール回避ゲーム</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #070710;
+      --cabinet-bg: #10101e;
+      --panel-bg: #0c0c18;
+      --neon-cyan: #00f0ff;
+      --neon-pink: #ff007f;
+      --neon-yellow: #ffe600;
+      --neon-green: #00ff66;
+      --text-main: #f0f4ff;
+      --text-muted: #7a85a8;
+      --font-arcade: 'Press Start 2P', 'Courier New', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      background-image: radial-gradient(circle at 50% 35%, #161632 0%, #070710 75%);
+      color: var(--text-main);
+      font-family: var(--font-arcade);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 16px;
+    }
+
+    /* CRTスキャンライン風オーバーレイ */
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.16) 0px,
+        rgba(0, 0, 0, 0.16) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .arcade-header {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .arcade-title {
+      font-size: 22px;
+      letter-spacing: 3px;
+      color: var(--neon-cyan);
+      text-shadow:
+        0 0 8px rgba(0, 240, 255, 0.8),
+        0 0 20px rgba(0, 240, 255, 0.4),
+        2px 2px 0px var(--neon-pink);
+    }
+
+    .arcade-cabinet {
+      display: flex;
+      gap: 20px;
+      background: var(--cabinet-bg);
+      padding: 20px;
+      border: 3px solid #2b2b4d;
+      border-radius: 10px;
+      box-shadow:
+        0 0 30px rgba(0, 240, 255, 0.15),
+        inset 0 0 20px rgba(0, 0, 0, 0.8);
+      position: relative;
+    }
+
+    .board-wrapper {
+      position: relative;
+      border: 3px solid var(--neon-cyan);
+      border-radius: 4px;
+      box-shadow:
+        0 0 12px rgba(0, 240, 255, 0.45),
+        inset 0 0 12px rgba(0, 0, 0, 0.9);
+      background: #05050b;
+      line-height: 0;
+      overflow: hidden;
+    }
+
+    canvas#game {
+      display: block;
+    }
+
+    /* オーバーレイ画面 */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 5, 14, 0.84);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      z-index: 10;
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .overlay-title {
+      font-size: 20px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+      color: var(--neon-yellow);
+      text-shadow: 0 0 10px rgba(255, 230, 0, 0.7);
+    }
+
+    .overlay-title.gameover {
+      color: var(--neon-pink);
+      text-shadow: 0 0 12px rgba(255, 0, 127, 0.8);
+    }
+
+    .overlay-sub {
+      font-size: 10px;
+      line-height: 2;
+      color: var(--text-main);
+      margin-bottom: 24px;
+    }
+
+    .arcade-btn {
+      font-family: var(--font-arcade);
+      font-size: 12px;
+      padding: 12px 20px;
+      background: transparent;
+      color: var(--neon-cyan);
+      border: 2px solid var(--neon-cyan);
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+      transition: all 0.15s ease;
+    }
+
+    .arcade-btn:hover {
+      background: var(--neon-cyan);
+      color: #05050b;
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.8);
+    }
+
+    /* サイドパネル */
+    .side-panel {
+      width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel-box {
+      background: var(--panel-bg);
+      border: 2px solid #2a2a4a;
+      border-radius: 6px;
+      padding: 12px;
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
+    }
+
+    .panel-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+
+    .panel-value {
+      font-size: 15px;
+      color: var(--neon-yellow);
+      text-shadow: 0 0 8px rgba(255, 230, 0, 0.4);
+      text-align: right;
+    }
+
+    .panel-value.cyan {
+      color: var(--neon-cyan);
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+    }
+
+    .panel-value.green {
+      color: var(--neon-green);
+      text-shadow: 0 0 8px rgba(0, 255, 102, 0.4);
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      font-size: 10px;
+    }
+
+    .shield-badge {
+      padding: 3px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      border: 1px solid #2a2a4a;
+      color: var(--text-muted);
+    }
+
+    .shield-badge.active {
+      color: var(--neon-cyan);
+      border-color: var(--neon-cyan);
+      box-shadow: 0 0 8px rgba(0, 240, 255, 0.45);
+    }
+
+    .gauge-track {
+      width: 100%;
+      height: 10px;
+      background: #06060e;
+      border: 1px solid #2a2a4a;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      width: 100%;
+      background: var(--neon-green);
+      box-shadow: 0 0 8px rgba(0, 255, 102, 0.6);
+      transition: width 0.05s linear;
+    }
+
+    .gauge-fill.charging {
+      background: var(--neon-yellow);
+      box-shadow: none;
+    }
+
+    .sound-toggle {
+      width: 100%;
+      font-family: var(--font-arcade);
+      font-size: 9px;
+      padding: 9px 10px;
+      background: #141428;
+      color: var(--neon-green);
+      border: 2px solid #2a2a4a;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: border-color 0.15s;
+    }
+
+    .sound-toggle:hover {
+      border-color: var(--neon-cyan);
+    }
+
+    .sound-toggle.muted {
+      color: var(--text-muted);
+    }
+
+    .controls-box {
+      font-size: 8px;
+      line-height: 1.9;
+      color: var(--text-muted);
+    }
+
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px dashed #1e1e36;
+      padding: 2px 0;
+    }
+
+    .controls-row:last-child {
+      border-bottom: none;
+    }
+
+    .key-badge {
+      color: var(--text-main);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="arcade-header">
+    <h1 class="arcade-title">STAR DODGER</h1>
+  </header>
+
+  <main class="arcade-cabinet">
+    <div class="board-wrapper">
+      <canvas id="game" width="400" height="600"></canvas>
+
+      <div id="overlay" class="overlay">
+        <div id="overlay-title" class="overlay-title">READY TO<br>LAUNCH</div>
+        <div id="overlay-sub" class="overlay-sub">DODGE ENEMIES &amp; FLY FAR!<br>PRESS ENTER OR CLICK</div>
+        <button id="overlay-btn" class="arcade-btn">START MISSION</button>
+      </div>
+    </div>
+
+    <aside class="side-panel">
+      <div class="panel-box">
+        <div class="panel-label">HI-SCORE</div>
+        <div id="hiscore" class="panel-value cyan">000000 m</div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-label">DISTANCE</div>
+        <div id="distance" class="panel-value">000000 m</div>
+      </div>
+
+      <div class="panel-box" style="display: flex; justify-content: space-between; gap: 10px;">
+        <div style="flex: 1;">
+          <div class="panel-label">SPEED LV</div>
+          <div id="level" class="panel-value green" style="text-align: left;">1</div>
+        </div>
+        <div style="flex: 1; text-align: right;">
+          <div class="panel-label">GRAZE</div>
+          <div id="graze" class="panel-value cyan">0</div>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-label">SHIP STATUS</div>
+        <div class="status-row">
+          <span>SHIELD</span>
+          <span id="shield-badge" class="shield-badge">NONE</span>
+        </div>
+        <div style="margin-top: 10px;">
+          <div class="status-row">
+            <span>BOOST DASH</span>
+            <span id="boost-text" style="color: var(--neon-green); font-size: 8px;">READY</span>
+          </div>
+          <div class="gauge-track">
+            <div id="boost-gauge" class="gauge-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <button id="sound-btn" class="sound-toggle" type="button">
+        <span>SOUND (M)</span>
+        <span id="sound-status">ON</span>
+      </button>
+
+      <div class="panel-box controls-box">
+        <div class="panel-label">CONTROLS</div>
+        <div class="controls-row"><span class="key-badge">ARROWS / WASD</span><span>MOVE</span></div>
+        <div class="controls-row"><span class="key-badge">SPACE / SHIFT</span><span>BOOST</span></div>
+        <div class="controls-row"><span class="key-badge">P</span><span>PAUSE</span></div>
+        <div class="controls-row"><span class="key-badge">R</span><span>RESTART</span></div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    (() => {
+      // ==========================================
+      // 定数・設定
+      // ==========================================
+      const WIDTH = 400;
+      const HEIGHT = 600;
+      const STORAGE_KEY_HISCORE = 'star_dodger_hiscore';
+
+      const PLAYER_SPEED = 270;
+      const BOOST_SPEED_MULT = 2.4;
+      const BOOST_DURATION = 0.22;   // 無敵ダッシュ時間(秒)
+      const BOOST_COOLDOWN = 2.8;    // クールタイム(秒)
+      const INVINCIBLE_DURATION = 1.2;
+
+      // ==========================================
+      // Web Audio API レトロ効果音
+      // ==========================================
+      class ArcadeAudio {
+        constructor() {
+          this.ctx = null;
+          this.muted = false;
+        }
+
+        init() {
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) this.ctx = new AudioCtx();
+          }
+          if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+          }
+        }
+
+        toggleMute() {
+          this.muted = !this.muted;
+          return this.muted;
+        }
+
+        playTone(freq, duration, type = 'square', volume = 0.08, slideTo = null) {
+          if (this.muted) return;
+          this.init();
+          if (!this.ctx) return;
+
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          if (slideTo !== null) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), now + duration);
+          }
+
+          gain.gain.setValueAtTime(volume, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + duration);
+        }
+
+        start() {
+          [330, 440, 554, 659].forEach((f, i) => {
+            setTimeout(() => this.playTone(f, 0.08, 'square', 0.07), i * 50);
+          });
+        }
+
+        boost() {
+          this.playTone(220, 0.16, 'sawtooth', 0.08, 720);
+        }
+
+        pickup(isShield) {
+          if (isShield) {
+            this.playTone(523, 0.09, 'triangle', 0.09, 1046);
+          } else {
+            this.playTone(660, 0.07, 'square', 0.07);
+            setTimeout(() => this.playTone(880, 0.1, 'square', 0.07), 55);
+          }
+        }
+
+        graze() {
+          this.playTone(980, 0.04, 'triangle', 0.04, 1320);
+        }
+
+        shieldBreak() {
+          this.playTone(300, 0.18, 'sawtooth', 0.1, 90);
+        }
+
+        levelUp() {
+          [440, 587, 880].forEach((f, i) => {
+            setTimeout(() => this.playTone(f, 0.09, 'square', 0.06), i * 60);
+          });
+        }
+
+        crash() {
+          this.playTone(180, 0.35, 'sawtooth', 0.12, 35);
+          setTimeout(() => this.playTone(110, 0.3, 'square', 0.1, 25), 90);
+        }
+      }
+
+      const audio = new ArcadeAudio();
+
+      // ==========================================
+      // DOM要素
+      // ==========================================
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+
+      const distanceEl = document.getElementById('distance');
+      const hiscoreEl = document.getElementById('hiscore');
+      const levelEl = document.getElementById('level');
+      const grazeEl = document.getElementById('graze');
+      const shieldBadgeEl = document.getElementById('shield-badge');
+      const boostTextEl = document.getElementById('boost-text');
+      const boostGaugeEl = document.getElementById('boost-gauge');
+
+      const overlayEl = document.getElementById('overlay');
+      const overlayTitleEl = document.getElementById('overlay-title');
+      const overlaySubEl = document.getElementById('overlay-sub');
+      const overlayBtnEl = document.getElementById('overlay-btn');
+
+      const soundBtnEl = document.getElementById('sound-btn');
+      const soundStatusEl = document.getElementById('sound-status');
+
+      // ==========================================
+      // ゲーム状態
+      // ==========================================
+      let gameState = 'IDLE'; // 'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'
+      let distance = 0;
+      let hiScore = Number(localStorage.getItem(STORAGE_KEY_HISCORE) || 0);
+      let level = 1;
+      let grazeCount = 0;
+      let lastTime = 0;
+      let shakeTimer = 0;
+      let gridOffset = 0;
+
+      const keysDown = {};
+
+      // プレイヤー
+      const player = {
+        x: WIDTH / 2,
+        y: HEIGHT - 85,
+        radius: 9, // 当たり判定は少し小さめにして快適性向上
+        hasShield: false,
+        invincibleTimer: 0,
+        boostTimer: 0,
+        boostCooldown: 0,
+        trail: []
+      };
+
+      // オブジェクト配列
+      let stars = [];
+      let enemies = [];
+      let items = [];
+      let particles = [];
+      let popups = [];
+
+      let enemySpawnTimer = 0;
+      let itemSpawnTimer = 4.0;
+
+      // ==========================================
+      // 初期化・星生成
+      // ==========================================
+      function initStars() {
+        stars = [];
+        for (let i = 0; i < 65; i++) {
+          const layer = Math.floor(Math.random() * 3) + 1;
+          stars.push({
+            x: Math.random() * WIDTH,
+            y: Math.random() * HEIGHT,
+            size: layer === 3 ? 2.5 : layer === 2 ? 1.8 : 1.2,
+            speed: layer * 45,
+            alpha: layer * 0.28
+          });
+        }
+      }
+
+      function formatDistance(val) {
+        return `${String(Math.floor(val)).padStart(6, '0')} m`;
+      }
+
+      function updateHUD() {
+        const d = Math.floor(distance);
+        distanceEl.textContent = formatDistance(d);
+        if (d > hiScore) {
+          hiScore = d;
+          localStorage.setItem(STORAGE_KEY_HISCORE, String(hiScore));
+        }
+        hiscoreEl.textContent = formatDistance(hiScore);
+        levelEl.textContent = String(level);
+        grazeEl.textContent = String(grazeCount);
+
+        shieldBadgeEl.textContent = player.hasShield ? 'ACTIVE' : 'NONE';
+        shieldBadgeEl.classList.toggle('active', player.hasShield);
+
+        const readyRatio = player.boostCooldown <= 0
+          ? 1
+          : Math.max(0, 1 - player.boostCooldown / BOOST_COOLDOWN);
+        boostGaugeEl.style.width = `${readyRatio * 100}%`;
+        const isReady = player.boostCooldown <= 0;
+        boostGaugeEl.classList.toggle('charging', !isReady);
+        boostTextEl.textContent = player.boostTimer > 0
+          ? 'ACTIVE!'
+          : isReady ? 'READY' : 'CHARGING';
+        boostTextEl.style.color = isReady ? 'var(--neon-green)' : 'var(--neon-yellow)';
+      }
+
+      // ==========================================
+      // ゲーム制御
+      // ==========================================
+      function startGame() {
+        audio.init();
+        audio.start();
+
+        distance = 0;
+        level = 1;
+        grazeCount = 0;
+        shakeTimer = 0;
+
+        player.x = WIDTH / 2;
+        player.y = HEIGHT - 85;
+        player.hasShield = false;
+        player.invincibleTimer = 0;
+        player.boostTimer = 0;
+        player.boostCooldown = 0;
+        player.trail = [];
+
+        enemies = [];
+        items = [];
+        particles = [];
+        popups = [];
+        enemySpawnTimer = 0.6;
+        itemSpawnTimer = 5.0;
+
+        gameState = 'PLAYING';
+        hideOverlay();
+        updateHUD();
+      }
+
+      function togglePause() {
+        if (gameState === 'PLAYING') {
+          gameState = 'PAUSED';
+          showOverlay('PAUSED', 'PRESS P TO RESUME', 'RESUME');
+        } else if (gameState === 'PAUSED') {
+          gameState = 'PLAYING';
+          hideOverlay();
+          lastTime = performance.now();
+        }
+      }
+
+      function triggerGameOver() {
+        gameState = 'GAMEOVER';
+        shakeTimer = 0.35;
+        audio.crash();
+        spawnExplosion(player.x, player.y, '#ff007f', 28);
+        spawnExplosion(player.x, player.y, '#00f0ff', 16);
+        updateHUD();
+        showOverlay(
+          'MISSION FAILED',
+          `DISTANCE: ${Math.floor(distance)} m\nGRAZE: ${grazeCount}\nPRESS R OR ENTER`,
+          'RETRY',
+          true
+        );
+      }
+
+      function showOverlay(title, sub, btnText, isGameOver = false) {
+        overlayTitleEl.textContent = title;
+        overlayTitleEl.classList.toggle('gameover', isGameOver);
+        overlaySubEl.innerHTML = sub.replace(/\n/g, '<br>');
+        overlayBtnEl.textContent = btnText;
+        overlayEl.classList.remove('hidden');
+      }
+
+      function hideOverlay() {
+        overlayEl.classList.add('hidden');
+      }
+
+      // ==========================================
+      // スポーン処理（敵・アイテム）
+      // ==========================================
+      function spawnEnemy() {
+        const speedMult = 1 + (level - 1) * 0.14;
+        const roll = Math.random();
+
+        // レベルに応じて多彩な敵が登場
+        if (level >= 2 && roll < 0.22) {
+          // 高速突撃型（予告ラインあり）
+          const x = 30 + Math.random() * (WIDTH - 60);
+          enemies.push({
+            type: 'charger',
+            x,
+            y: -25,
+            radius: 13,
+            vy: 560 * speedMult,
+            vx: 0,
+            warnTimer: 0.72,
+            grazed: false
+          });
+        } else if (level >= 2 && roll < 0.48) {
+          // ジグザグ型
+          const x = 50 + Math.random() * (WIDTH - 100);
+          enemies.push({
+            type: 'sweeper',
+            x,
+            baseX: x,
+            y: -24,
+            radius: 14,
+            vy: 210 * speedMult,
+            phase: Math.random() * Math.PI * 2,
+            amp: 55 + Math.random() * 35,
+            freq: 3.2 + Math.random() * 1.2,
+            grazed: false
+          });
+        } else if (roll < 0.65) {
+          // 大型メテオ
+          const radius = 22 + Math.random() * 8;
+          enemies.push({
+            type: 'meteor',
+            x: radius + Math.random() * (WIDTH - radius * 2),
+            y: -radius - 10,
+            radius,
+            vy: (130 + Math.random() * 50) * speedMult,
+            vx: (Math.random() - 0.5) * 40,
+            angle: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 3,
+            grazed: false
+          });
+        } else {
+          // 直進型（基本）
+          enemies.push({
+            type: 'basic',
+            x: 24 + Math.random() * (WIDTH - 48),
+            y: -20,
+            radius: 13,
+            vy: (210 + Math.random() * 80) * speedMult,
+            vx: (Math.random() - 0.5) * 30,
+            grazed: false
+          });
+        }
+      }
+
+      function spawnItem() {
+        const isShield = Math.random() < 0.45;
+        items.push({
+          type: isShield ? 'shield' : 'core',
+          x: 32 + Math.random() * (WIDTH - 64),
+          y: -20,
+          radius: 12,
+          vy: 150,
+          pulse: 0
+        });
+      }
+
+      // ==========================================
+      // パーティクル・ポップアップ
+      // ==========================================
+      function spawnExplosion(x, y, color, count = 14) {
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 50 + Math.random() * 190;
+          particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.35 + Math.random() * 0.35,
+            maxLife: 0.7,
+            size: 2 + Math.random() * 3,
+            color
+          });
+        }
+      }
+
+      function addPopup(x, y, text, color) {
+        popups.push({
+          x,
+          y,
+          text,
+          color,
+          life: 0.85
+        });
+      }
+
+      // ==========================================
+      // 更新処理
+      // ==========================================
+      function updateGame(dt) {
+        const speedFactor = 1 + (level - 1) * 0.14;
+
+        // 距離加算＆レベルアップ
+        const prevLevel = level;
+        distance += (105 * speedFactor) * dt;
+        level = Math.floor(distance / 500) + 1;
+        if (level > prevLevel) {
+          audio.levelUp();
+          addPopup(WIDTH / 2, 120, `SPEED UP! LV ${level}`, '#00ff66');
+        }
+
+        // 背景星・グリッド更新
+        gridOffset = (gridOffset + 180 * speedFactor * dt) % 40;
+        for (const s of stars) {
+          s.y += s.speed * speedFactor * dt;
+          if (s.y > HEIGHT) {
+            s.y = -4;
+            s.x = Math.random() * WIDTH;
+          }
+        }
+
+        // プレイヤータイマー
+        if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
+        if (player.boostCooldown > 0) player.boostCooldown = Math.max(0, player.boostCooldown - dt);
+
+        let moveMult = 1;
+        if (player.boostTimer > 0) {
+          player.boostTimer -= dt;
+          moveMult = BOOST_SPEED_MULT;
+          player.trail.push({ x: player.x, y: player.y, alpha: 0.7 });
+        }
+
+        // 残像フェード
+        for (let i = player.trail.length - 1; i >= 0; i--) {
+          player.trail[i].alpha -= dt * 3.5;
+          if (player.trail[i].alpha <= 0) player.trail.splice(i, 1);
+        }
+
+        // プレイヤー移動
+        let dx = 0;
+        let dy = 0;
+        if (keysDown['ArrowLeft'] || keysDown['KeyA']) dx -= 1;
+        if (keysDown['ArrowRight'] || keysDown['KeyD']) dx += 1;
+        if (keysDown['ArrowUp'] || keysDown['KeyW']) dy -= 1;
+        if (keysDown['ArrowDown'] || keysDown['KeyS']) dy += 1;
+
+        if (dx !== 0 && dy !== 0) {
+          const inv = 1 / Math.SQRT2;
+          dx *= inv;
+          dy *= inv;
+        }
+
+        player.x = Math.max(20, Math.min(WIDTH - 20, player.x + dx * PLAYER_SPEED * moveMult * dt));
+        player.y = Math.max(30, Math.min(HEIGHT - 24, player.y + dy * PLAYER_SPEED * moveMult * dt));
+
+        // エンジン噴射パーティクル
+        if (Math.random() < 0.7) {
+          particles.push({
+            x: player.x + (Math.random() - 0.5) * 6,
+            y: player.y + 15,
+            vx: (Math.random() - 0.5) * 20,
+            vy: 90 + Math.random() * 60,
+            life: 0.18,
+            maxLife: 0.18,
+            size: 2.5,
+            color: player.boostTimer > 0 ? '#00ff66' : '#00f0ff'
+          });
+        }
+
+        // 敵スポーン
+        enemySpawnTimer -= dt;
+        if (enemySpawnTimer <= 0) {
+          spawnEnemy();
+          const baseInterval = Math.max(0.22, 0.72 - (level - 1) * 0.07);
+          enemySpawnTimer = baseInterval * (0.75 + Math.random() * 0.5);
+        }
+
+        // アイテムスポーン
+        itemSpawnTimer -= dt;
+        if (itemSpawnTimer <= 0) {
+          spawnItem();
+          itemSpawnTimer = 6.5 + Math.random() * 4.5;
+        }
+
+        // 敵の移動・当たり判定
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const e = enemies[i];
+
+          if (e.type === 'charger' && e.warnTimer > 0) {
+            e.warnTimer -= dt;
+            continue;
+          }
+
+          e.y += e.vy * dt;
+          if (e.type === 'sweeper') {
+            e.phase += e.freq * dt;
+            e.x = Math.max(22, Math.min(WIDTH - 22, e.baseX + Math.sin(e.phase) * e.amp));
+          } else {
+            e.x += (e.vx || 0) * dt;
+            if (e.x < e.radius || e.x > WIDTH - e.radius) {
+              e.vx = -(e.vx || 0);
+            }
+          }
+
+          if (e.type === 'meteor') {
+            e.angle += e.rotSpeed * dt;
+          }
+
+          // 衝突＆ニアミス判定
+          const dist = Math.hypot(player.x - e.x, player.y - e.y);
+          const hitDist = player.radius + e.radius - 2;
+          const grazeDist = hitDist + 22;
+
+          if (dist < hitDist) {
+            if (player.boostTimer > 0 || player.invincibleTimer > 0) {
+              // 無敵中はすり抜け
+            } else if (player.hasShield) {
+              player.hasShield = false;
+              player.invincibleTimer = INVINCIBLE_DURATION;
+              shakeTimer = 0.2;
+              audio.shieldBreak();
+              spawnExplosion(player.x, player.y, '#00f0ff', 18);
+              addPopup(player.x, player.y - 20, 'SHIELD SAVED!', '#00f0ff');
+              enemies.splice(i, 1);
+              continue;
+            } else {
+              triggerGameOver();
+              return;
+            }
+          } else if (!e.grazed && dist < grazeDist) {
+            e.grazed = true;
+            grazeCount += 1;
+            distance += 25;
+            audio.graze();
+            spawnExplosion((player.x + e.x) / 2, (player.y + e.y) / 2, '#ffe600', 5);
+            addPopup(player.x, player.y - 18, 'GRAZE +25m', '#ffe600');
+          }
+
+          if (e.y > HEIGHT + 50) {
+            enemies.splice(i, 1);
+          }
+        }
+
+        // アイテム更新
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          it.y += it.vy * dt;
+          it.pulse += dt * 6;
+
+          const dist = Math.hypot(player.x - it.x, player.y - it.y);
+          if (dist < player.radius + it.radius + 4) {
+            if (it.type === 'shield') {
+              audio.pickup(true);
+              if (player.hasShield) {
+                distance += 150;
+                addPopup(it.x, it.y, 'SHIELD +150m', '#00f0ff');
+              } else {
+                player.hasShield = true;
+                addPopup(it.x, it.y, 'SHIELD ON!', '#00f0ff');
+              }
+              spawnExplosion(it.x, it.y, '#00f0ff', 12);
+            } else {
+              audio.pickup(false);
+              distance += 100;
+              addPopup(it.x, it.y, '+100m', '#ffe600');
+              spawnExplosion(it.x, it.y, '#ffe600', 12);
+            }
+            items.splice(i, 1);
+            continue;
+          }
+
+          if (it.y > HEIGHT + 30) {
+            items.splice(i, 1);
+          }
+        }
+      }
+
+      function updateEffects(dt) {
+        if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        for (let i = popups.length - 1; i >= 0; i--) {
+          const pop = popups[i];
+          pop.y -= 36 * dt;
+          pop.life -= dt;
+          if (pop.life <= 0) popups.splice(i, 1);
+        }
+      }
+
+      // ==========================================
+      // 描画処理
+      // ==========================================
+      function drawBackground() {
+        ctx.fillStyle = '#05050b';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // サイバーグリッド
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.06)';
+        ctx.lineWidth = 1;
+        for (let x = 40; x < WIDTH; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, HEIGHT);
+          ctx.stroke();
+        }
+        for (let y = gridOffset; y < HEIGHT; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(WIDTH, y);
+          ctx.stroke();
+        }
+
+        // 星空
+        for (const s of stars) {
+          ctx.fillStyle = `rgba(220, 240, 255, ${s.alpha})`;
+          ctx.fillRect(s.x, s.y, s.size, s.size);
+        }
+      }
+
+      function drawPlayerShip(x, y, alpha = 1) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.globalAlpha = alpha;
+
+        // 機体本体（レトロシューティング風デルタ翼）
+        ctx.fillStyle = player.boostTimer > 0 ? '#00ff66' : '#00f0ff';
+        ctx.beginPath();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(14, 12);
+        ctx.lineTo(5, 8);
+        ctx.lineTo(0, 13);
+        ctx.lineTo(-5, 8);
+        ctx.lineTo(-14, 12);
+        ctx.closePath();
+        ctx.fill();
+
+        // コックピット
+        ctx.fillStyle = '#ffe600';
+        ctx.beginPath();
+        ctx.moveTo(0, -7);
+        ctx.lineTo(4, 3);
+        ctx.lineTo(-4, 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // シールドリング
+        if (player.hasShield) {
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#00f0ff';
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(0, 0, 20, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      function drawEnemies() {
+        for (const e of enemies) {
+          if (e.type === 'charger' && e.warnTimer > 0) {
+            // 警告レーザー線＆「！」マーク
+            const blink = Math.floor(e.warnTimer * 14) % 2 === 0;
+            ctx.save();
+            ctx.strokeStyle = blink ? 'rgba(255, 0, 127, 0.7)' : 'rgba(255, 230, 0, 0.5)';
+            ctx.setLineDash([6, 6]);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(e.x, 0);
+            ctx.lineTo(e.x, HEIGHT);
+            ctx.stroke();
+
+            ctx.fillStyle = blink ? '#ff007f' : '#ffe600';
+            ctx.font = '14px "Press Start 2P", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('!', e.x, 26);
+            ctx.restore();
+            continue;
+          }
+
+          ctx.save();
+          ctx.translate(e.x, e.y);
+
+          if (e.type === 'basic') {
+            ctx.fillStyle = '#ff2255';
+            ctx.beginPath();
+            ctx.moveTo(0, 14);
+            ctx.lineTo(13, -10);
+            ctx.lineTo(0, -5);
+            ctx.lineTo(-13, -10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#ffb3c6';
+            ctx.fillRect(-3, -3, 6, 6);
+          } else if (e.type === 'sweeper') {
+            ctx.fillStyle = '#c800ff';
+            ctx.beginPath();
+            ctx.moveTo(0, 14);
+            ctx.lineTo(14, 0);
+            ctx.lineTo(0, -14);
+            ctx.lineTo(-14, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#ffe600';
+            ctx.beginPath();
+            ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (e.type === 'charger') {
+            ctx.fillStyle = '#ff007f';
+            ctx.beginPath();
+            ctx.moveTo(0, 18);
+            ctx.lineTo(10, -14);
+            ctx.lineTo(-10, -14);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-2, -10, 4, 14);
+          } else if (e.type === 'meteor') {
+            ctx.rotate(e.angle);
+            ctx.fillStyle = '#ff7700';
+            ctx.strokeStyle = '#ffd080';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const sides = 7;
+            for (let s = 0; s < sides; s++) {
+              const a = (s / sides) * Math.PI * 2;
+              const r = e.radius * (s % 2 === 0 ? 1 : 0.78);
+              const px = Math.cos(a) * r;
+              const py = Math.sin(a) * r;
+              if (s === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+
+          ctx.restore();
+        }
+      }
+
+      function drawItems() {
+        for (const it of items) {
+          const scale = 1 + Math.sin(it.pulse) * 0.12;
+          ctx.save();
+          ctx.translate(it.x, it.y);
+          ctx.scale(scale, scale);
+
+          if (it.type === 'shield') {
+            ctx.strokeStyle = '#00f0ff';
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.25)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, it.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px "Press Start 2P", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('S', 0, 1);
+          } else {
+            ctx.fillStyle = '#ffe600';
+            ctx.beginPath();
+            ctx.moveTo(0, -11);
+            ctx.lineTo(11, 0);
+            ctx.lineTo(0, 11);
+            ctx.lineTo(-11, 0);
+            ctx.closePath();
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+      }
+
+      function drawEffects() {
+        for (const p of particles) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+          ctx.restore();
+        }
+
+        for (const pop of popups) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, pop.life * 1.4);
+          ctx.fillStyle = pop.color;
+          ctx.font = '9px "Press Start 2P", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(pop.text, pop.x, pop.y);
+          ctx.restore();
+        }
+      }
+
+      function render() {
+        ctx.save();
+        if (shakeTimer > 0) {
+          const mag = 6 * (shakeTimer / 0.35);
+          ctx.translate((Math.random() - 0.5) * mag * 2, (Math.random() - 0.5) * mag * 2);
+        }
+
+        drawBackground();
+        drawItems();
+        drawEnemies();
+
+        if (gameState !== 'GAMEOVER') {
+          for (const t of player.trail) {
+            drawPlayerShip(t.x, t.y, t.alpha * 0.45);
+          }
+          const blinkHide = player.invincibleTimer > 0 && Math.floor(player.invincibleTimer * 20) % 2 === 0;
+          if (!blinkHide) {
+            drawPlayerShip(player.x, player.y, 1);
+          }
+        }
+
+        drawEffects();
+        ctx.restore();
+      }
+
+      // ==========================================
+      // メインループ
+      // ==========================================
+      function loop(time = 0) {
+        const dt = Math.min(0.05, (time - lastTime) / 1000);
+        lastTime = time;
+
+        if (gameState === 'PLAYING') {
+          updateGame(dt);
+          updateEffects(dt);
+          updateHUD();
+        } else {
+          updateEffects(dt);
+        }
+
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      // ==========================================
+      // 入力イベント
+      // ==========================================
+      document.addEventListener('keydown', (e) => {
+        const preventKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'];
+        if (preventKeys.includes(e.code)) e.preventDefault();
+
+        keysDown[e.code] = true;
+
+        if (e.code === 'KeyM') {
+          const muted = audio.toggleMute();
+          soundStatusEl.textContent = muted ? 'OFF' : 'ON';
+          soundBtnEl.classList.toggle('muted', muted);
+          return;
+        }
+
+        if (e.code === 'KeyR' && gameState !== 'IDLE') {
+          startGame();
+          return;
+        }
+
+        if (e.code === 'Enter') {
+          if (gameState === 'IDLE' || gameState === 'GAMEOVER') {
+            startGame();
+          } else if (gameState === 'PAUSED') {
+            togglePause();
+          }
+          return;
+        }
+
+        if (e.code === 'KeyP') {
+          if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+            togglePause();
+          }
+          return;
+        }
+
+        if (gameState === 'PLAYING' && (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight')) {
+          if (player.boostCooldown <= 0 && player.boostTimer <= 0) {
+            player.boostTimer = BOOST_DURATION;
+            player.boostCooldown = BOOST_COOLDOWN;
+            audio.boost();
+          }
+        }
+      });
+
+      document.addEventListener('keyup', (e) => {
+        keysDown[e.code] = false;
+      });
+
+      overlayBtnEl.addEventListener('click', () => {
+        if (gameState === 'PAUSED') {
+          togglePause();
+        } else {
+          startGame();
+        }
+      });
+
+      soundBtnEl.addEventListener('click', () => {
+        const muted = audio.toggleMute();
+        soundStatusEl.textContent = muted ? 'OFF' : 'ON';
+        soundBtnEl.classList.toggle('muted', muted);
+        soundBtnEl.blur();
+      });
+
+      // 初期化
+      initStars();
+      updateHUD();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
